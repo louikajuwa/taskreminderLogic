@@ -1,0 +1,120 @@
+services:
+  # ---------------------------------------------------------------------------
+  # PHP-FPM application container (Laravel)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: taskmanager-app
+    container_name: taskmanager_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - vendor:/var/www/vendor
+      - node_modules:/var/www/node_modules
+      # Keep the framework cache (config/routes/events) inside the container so
+      # it doesn't leak to the host (host tooling uses its own uncached config)
+      # and isn't read across the slow bind mount.
+      - bootstrap_cache:/var/www/bootstrap/cache
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-task_manager}
+      DB_USERNAME: ${DB_USERNAME:-taskuser}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - taskmanager
+
+  # ---------------------------------------------------------------------------
+  # Nginx web server -> http://localhost:8090
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: taskmanager_nginx
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - taskmanager
+
+  # ---------------------------------------------------------------------------
+  # MySQL database (host port 3390 -> container 3306)
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: taskmanager_mysql
+    restart: unless-stopped
+    ports:
+      - "3390:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-task_manager}
+      MYSQL_USER: ${DB_USERNAME:-taskuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:-rootsecret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - taskmanager
+
+  # ---------------------------------------------------------------------------
+  # phpMyAdmin -> http://localhost:8091
+  # ---------------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: taskmanager_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8091:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 50M
+    depends_on:
+      - mysql
+    networks:
+      - taskmanager
+
+  # ---------------------------------------------------------------------------
+  # Vite asset builder. On start it builds optimized, bundled assets into
+  # public/build, then idles. Laravel serves those static files, so there is NO
+  # on-demand compilation = fast first page load.
+  #   - After editing frontend files, rebuild with:
+  #       docker compose exec vite npm run build
+  #   - For instant HMR while doing heavy frontend work, see WSL-PERFORMANCE.md.
+  # ---------------------------------------------------------------------------
+  vite:
+    image: node:20-alpine
+    container_name: taskmanager_vite
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - node_modules:/var/www/node_modules
+    command: sh -c "npm install && rm -f public/hot && npm run build && echo '[vite] assets built - rebuild after edits via docker compose exec vite npm run build' && tail -f /dev/null"
+    networks:
+      - taskmanager
+
+networks:
+  taskmanager:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  vendor:
+  node_modules:
+  bootstrap_cache:
