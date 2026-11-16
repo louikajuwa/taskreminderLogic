@@ -95,7 +95,7 @@ services:
   # on-demand compilation = fast first page load.
   #   - After editing frontend files, rebuild with:
   #       docker compose exec vite npm run build
-  #   - For instant HMR while doing heavy frontend work, see WSL-PERFORMANCE.md.
+  #   - For instant HMR while doing heavy frontend work, run the Vite dev server.
   # ---------------------------------------------------------------------------
   vite:
     image: node:20-alpine

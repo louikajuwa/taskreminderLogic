@@ -61,7 +61,7 @@ Key `.env` keys and their defaults:
 APP_NAME="Task Manager"
 APP_ENV=local
 APP_KEY=                          # generated automatically on first boot
-APP_DEBUG=true
+APP_DEBUG=true                      # local development only
 APP_URL=http://localhost:8090
 
 DB_CONNECTION=mysql
@@ -206,4 +206,4 @@ Controllers: `DashboardController`, `TaskController`, `AttachmentController`. Mo
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
